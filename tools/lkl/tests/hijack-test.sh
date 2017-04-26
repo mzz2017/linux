@@ -38,9 +38,9 @@ ${hijack_script} ./ping 127.0.0.1 -c 1
 rm ./ping
 
 echo "== ping6 test=="
-cp `which ping6` .
-${hijack_script} ./ping6 ::1 -c 1
-rm ./ping6
+cp `which ping` .
+${hijack_script} ./ping ::1 -c 1
+rm ./ping
 
 echo "== Mount/dump tests =="
 # Need to say || true because ip -h returns < 0
@@ -96,18 +96,18 @@ echo "$addr" | grep "fc03::2"
 
 # Copy ping so we're allowed to run it under LKL
 cp `which ping` .
-cp `which ping6` .
+cp `which ping` .
 
 # Make sure we can ping the host from inside LKL
 ${hijack_script} ./ping 192.168.13.1 -c 1
-${hijack_script} ./ping6 fc03::1 -c 1
-rm ./ping ./ping6
+${hijack_script} ./ping fc03::1 -c 1
+rm ./ping 
 
 # Now let's check that the host can see LKL.
 sudo ip -6 neigh del fc03::2 dev lkl_ptt0
 sudo ip neigh del 192.168.13.2 dev lkl_ptt0
 sudo ping -i 0.01 -c 65 192.168.13.2 &
-sudo ping6 -i 0.01 -c 65 fc03::2 &
+sudo ping -i 0.01 -c 65 fc03::2 &
 ${hijack_script} sleep 3
 
 # add neighbor entries

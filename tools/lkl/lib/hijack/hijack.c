@@ -148,6 +148,7 @@ HOOK_FD_CALL(connect)
 HOOK_FD_CALL(listen)
 HOOK_FD_CALL(shutdown)
 HOOK_FD_CALL(accept)
+HOOK_FD_CALL(accept4)
 HOOK_FD_CALL(write)
 HOOK_FD_CALL(writev)
 HOOK_FD_CALL(sendto)
@@ -292,6 +293,7 @@ int select(int nfds, fd_set *r, fd_set *w, fd_set *e, struct timeval *t)
 }
 
 HOOK_CALL_USE_HOST_BEFORE_START(epoll_create);
+HOOK_CALL_USE_HOST_BEFORE_START(epoll_create1);
 
 HOST_CALL(epoll_ctl);
 int epoll_ctl(int epollfd, int op, int fd, struct epoll_event *event)

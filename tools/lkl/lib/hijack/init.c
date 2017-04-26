@@ -36,6 +36,14 @@
  * be longer than ~6 characters. */
 #define MAX_FSTYPE_LEN 50
 
+static inline void set_sockaddr(struct lkl_sockaddr_in *sin, unsigned int addr,
+				unsigned short port)
+{
+	sin->sin_family = LKL_AF_INET;
+	sin->sin_addr.lkl_s_addr = addr;
+	sin->sin_port = port;
+}
+
 int parse_mac_str(char *mac_str, __lkl__u8 mac[LKL_ETH_ALEN])
 {
 	char delim[] = ":";
@@ -378,13 +386,15 @@ hijack_init(void)
 		unsigned int addr = inet_addr(ip);
 		int nmlen = atoi(netmask_len);
 
-		if (addr != INADDR_NONE && nmlen > 0 && nmlen < 32) {
+		if (addr != INADDR_NONE && nmlen > 0 && nmlen <= 32) {
 			ret = lkl_if_set_ipv4(nd_ifindex, addr, nmlen);
 			if (ret < 0)
 				fprintf(stderr, "failed to set IPv4 address: %s\n",
 					lkl_strerror(ret));
 		}
 	}
+
+
 
 	if (nd_ifindex >= 0 && gateway) {
 		unsigned int addr = inet_addr(gateway);
@@ -435,6 +445,54 @@ hijack_init(void)
 
 	if (sysctls)
 		lkl_sysctl_parse_write(sysctls);
+
+
+	struct lkl_ifreq ifr;
+	int sock, err;
+
+	sock = lkl_sys_socket(LKL_AF_INET, LKL_SOCK_DGRAM, 0);
+	if (sock < 0)
+		return;
+
+	//snprintf(ifr.lkl_ifr_name, sizeof(ifr.lkl_ifr_name), "eth%d", id);
+	memset(&ifr, 0, sizeof(ifr));
+
+	ifr.lkl_ifr_ifindex = nd_ifindex;
+	lkl_sys_ioctl(sock, LKL_SIOCGIFNAME, (long)&ifr);
+	err = lkl_sys_ioctl(sock, LKL_SIOCGIFFLAGS, (long)&ifr);
+	if (!err) {
+		ifr.lkl_ifr_flags |= LKL_IFF_UP;
+		ifr.lkl_ifr_flags |= LKL_IFF_POINTOPOINT;
+		ifr.lkl_ifr_flags |= LKL_IFF_BROADCAST;
+		//ifr.lkl_ifr_flags &= ~LKL_IFF_BROADCAST;
+		ifr.lkl_ifr_flags |= LKL_IFF_NOARP;
+		ifr.lkl_ifr_flags &= ~LKL_IFF_MULTICAST;
+        //ifr.lkl_ifr_flags = LKL_IFF_UP | LKL_IFF_POINTOPOINT | LKL_IFF_BROADCAST | LKL_IFF_NOARP & (~LKL_IFF_MULTICAST);
+		err = lkl_sys_ioctl(sock, LKL_SIOCSIFFLAGS, (long)&ifr);
+    } else {
+        perror("lkl_sys_ioctl");
+    }
+	lkl_sys_ioctl(sock, LKL_SIOCGIFFLAGS, (long)&ifr);
+
+    unsigned int addr = inet_addr(ip);
+    set_sockaddr((struct lkl_sockaddr_in *) &ifr.lkl_ifr_dstaddr, addr, 0);
+	lkl_sys_ioctl(sock, LKL_SIOCSIFDSTADDR, (long)&ifr);
+
+    set_sockaddr((struct lkl_sockaddr_in *) &ifr.lkl_ifr_broadaddr, addr, 0);
+	lkl_sys_ioctl(sock, LKL_SIOCSIFBRDADDR, (long)&ifr);
+
+	struct lkl_rtentry re;
+
+	memset(&re, 0, sizeof(re));
+	set_sockaddr((struct lkl_sockaddr_in *) &re.rt_dst, 0, 0);
+	//set_sockaddr((struct lkl_sockaddr_in *) &re.rt_genmask, 0, 0);
+	//set_sockaddr((struct lkl_sockaddr_in *) &re.rt_gateway, 0, 0);
+    re.rt_dev = "eth0";
+	re.rt_flags = LKL_RTF_UP;
+	//re.rt_flags = LKL_RTF_UP | LKL_RTF_GATEWAY;
+	err = lkl_sys_ioctl(sock, LKL_SIOCADDRT, (long)&re);
+
+	lkl_sys_close(sock);
 }
 
 void __attribute__((destructor))

@@ -16,6 +16,11 @@
 #include <fcntl.h>
 #include <sys/poll.h>
 #include <sys/uio.h>
+#include <arpa/inet.h>
+
+#include <net/if.h>
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
 
 #include "virtio.h"
 #include "virtio_net_fd.h"
@@ -46,9 +51,31 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 	int ret;
 	struct lkl_netdev_fd *nd_fd =
 		container_of(nd, struct lkl_netdev_fd, dev);
+    struct msghdr msg;
+	struct sockaddr_ll ll;
+    memset(&msg, 0, sizeof(msg));
+	memset(&ll, 0, sizeof(ll));
+	ll.sll_family = PF_PACKET;
+	ll.sll_ifindex = if_nametoindex("venet0"); //ifname
+	//ll.sll_ifindex = if_nametoindex("enp0s9"); //ifname
+	//ll.sll_protocol = htons(ETH_P_ALL);
+	ll.sll_protocol = htons(ETH_P_IP);
+    msg.msg_name = &ll;
+    msg.msg_namelen = sizeof(ll);
+    msg.msg_iov = iov;
+    msg.msg_iovlen = cnt;
+
+        //for(int i =0; i< iov[0].iov_len; i++){
+        //    printf("%02x", *((char *)iov[0].iov_base + i) & 0xff);
+        //}
+        //printf("\n\n");
+
+    iov[0].iov_base += 14;
+    iov[0].iov_len -= 14;
 
 	do {
-		ret = writev(nd_fd->fd, iov, cnt);
+		//ret = writev(nd_fd->fd, iov, cnt);
+		ret = sendmsg(nd_fd->fd, &msg, 0);
 	} while (ret == -1 && errno == EINTR);
 
 	if (ret < 0) {
@@ -70,9 +97,73 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 	int ret;
 	struct lkl_netdev_fd *nd_fd =
 		container_of(nd, struct lkl_netdev_fd, dev);
+    struct msghdr msg;
+    memset(&msg, 0, sizeof(msg));
+	struct sockaddr_ll ll;
+	memset(&ll, 0, sizeof(ll));
+	ll.sll_family = PF_PACKET;
+	ll.sll_ifindex = if_nametoindex("venet0"); //ifname
+	//ll.sll_ifindex = if_nametoindex("enp0s9"); //ifname
+	//ll.sll_protocol = htons(ETH_P_ALL);
+	ll.sll_protocol = htons(ETH_P_IP);
+    msg.msg_name = &ll;
+    msg.msg_namelen = sizeof(ll);
+    //msg.msg_iov = (struct iovec *)iov + 1;
+    msg.msg_iov = iov;
+    //printf("cnt=%d\n",cnt);
+    msg.msg_iovlen = cnt;
+        //printf("piov0_len=%d\n", iov[0].iov_len);
+        //printf("piov1_len=%d\n", iov[1].iov_len);
+        //printf("piov2_len=%d\n", iov[2].iov_len);
+        char mac_layer[] = {0x08,0x00,0x27,0x1a,0xb1,0x01,0x08,0x08,0x27,0x1a,0xb1,0x02,0x08,0x00};
 
 	do {
-		ret = readv(nd_fd->fd, (struct iovec *)iov, cnt);
+		//ret = readv(nd_fd->fd, (struct iovec *)iov + 1, cnt);
+		ret = recvmsg(nd_fd->fd, &msg, 0);
+        if(ret == -1){
+        //    perror("recvmsg");
+            iov[1].iov_len = 0;
+        } else {
+            //iov[1].iov_len = ret;
+        //memcpy(iov[0].iov_base, iov[1].iov_base, ret);
+        //memcpy((char *)(iov[1].iov_base) +14, iov[0].iov_base, ret);
+        /*ICMP*/
+            //if(*((char *)(iov[1].iov_base) + 9) != 0x01){
+            //    ret = -1;
+            //    break;
+            //}
+            /*ICMP and TCP dst port 443*/
+            if((*((char *)(iov[1].iov_base) + 9) != 0x06 ||*((char *)(iov[1].iov_base) + 22) != 0x01 || *((unsigned char *)(iov[1].iov_base) + 23) != 0xBB )&& \
+                    *((char *)(iov[1].iov_base) + 9) != 0x01){
+                ret = -1;
+                break;
+            }
+        char tmp[2000];
+        memcpy(tmp, iov[1].iov_base, ret);
+        memcpy((char *)(iov[1].iov_base) +14, tmp, ret);
+        //free(tmp);
+        memcpy(iov[1].iov_base, mac_layer, 14);
+
+        //memcpy(iov[0].iov_base, mac_layer, 14);
+        ////iov[0].iov_base = mac_layer;
+        //iov[0].iov_len = 14;
+
+            ret += 14;
+        }
+        //printf("ret=%d\n", ret);
+
+
+        //memmove((char *)(iov[1].iov_base) +14, iov[1].iov_base, ret);
+        //strcat(mac_layer, iov[0].iov_base);
+        //iov[0].iov_base = mac_layer;
+        //printf("iov0_len=%d\n", iov[0].iov_len);
+        //printf("iov1_len=%d\n", iov[1].iov_len);
+        //printf("iov2_len=%d\n", iov[2].iov_len);
+        //iov[0].iov_len = iov[0].iov_len + 14;
+        //for(int i =0; i< iov[1].iov_len; i++){
+        //    printf("%02x", *((char *)iov[1].iov_base + i) & 0xff);
+        //}
+        //printf("\n\n");
 	} while (ret == -1 && errno == EINTR);
 
 	if (ret < 0) {

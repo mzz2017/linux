@@ -17,6 +17,7 @@
 #include <linux/if_packet.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <net/ethernet.h>
 
 #include "virtio.h"
 #include "virtio_net_fd.h"
@@ -32,7 +33,10 @@ struct lkl_netdev *lkl_netdev_raw_create(const char *ifname)
 	struct sockaddr_ll ll;
 	int fd, fd_flags, val;
 
-	fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	//fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	//fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_IP));
+	fd = socket(PF_PACKET, SOCK_DGRAM, htons(ETH_P_IP));
+	//fd = socket(PF_INET, SOCK_RAW, htons(IPPROTO_TCP));
 	if (fd < 0) {
 		perror("socket");
 		return NULL;
@@ -41,13 +45,21 @@ struct lkl_netdev *lkl_netdev_raw_create(const char *ifname)
 	memset(&ll, 0, sizeof(ll));
 	ll.sll_family = PF_PACKET;
 	ll.sll_ifindex = if_nametoindex(ifname);
-	ll.sll_protocol = htons(ETH_P_ALL);
+	//ll.sll_protocol = htons(ETH_P_ALL);
+	ll.sll_protocol = htons(ETH_P_IP);
+    //const unsigned char ether_broadcast_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    //ll.sll_halen = ETHER_ADDR_LEN;
+    //memcpy(ll.sll_addr, ether_broadcast_addr, ETHER_ADDR_LEN);
+
 	ret = bind(fd, (struct sockaddr *)&ll, sizeof(ll));
 	if (ret) {
 		perror("bind");
 		close(fd);
 		return NULL;
 	}
+
+
+   // printf("%s\n", ifname);
 
 	val = 1;
 	ret = setsockopt(fd, SOL_PACKET, PACKET_QDISC_BYPASS, &val,
