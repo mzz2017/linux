@@ -71,8 +71,19 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 
     //iov[0].iov_base += 14;
     //iov[0].iov_len -= 14;
+    //for(int i=0; i< cnt; i++){
+    //    printf("iov[%d].iov_len=%d\n", i, iov[i].iov_len);
+    //}
+
+    //test
+    //if(iov[0].iov_len < 14){
+    //    printf("iov[0].iov_len=%d\n", iov[0].iov_len);
+    //    printf("iov[1].iov_len=%d\n", iov[1].iov_len);
+    //}
+
+    // strip the MAC header(14 bytes)
     for(int i=0; i< cnt; i++){
-        if(iov[i].iov_len > 14){
+        if(iov[i].iov_len >= 14){
             iov[i].iov_base += 14;
             iov[i].iov_len -= 14;
             break;
@@ -118,17 +129,21 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
     msg.msg_iovlen = cnt;
     char mac_layer[] = {0x08,0x00,0x27,0x1a,0xb1,0x01,0x08,0x08,0x27,0x1a,0xb1,0x02,0x08,0x00};
 
+    // the iov buffer is preallocated, recvmsg wouldn't allocate memory for it. refer to "man readv"
+    // left space for the MAC header(14 bytes)
+    int i=0;
+    for(; i< cnt; i++){
+        if(iov[i].iov_len >= 14){
+            iov[i].iov_base += 14;
+            iov[i].iov_len -= 14;
+            break;
+        }
+    }
+
 	do {
 		//ret = readv(nd_fd->fd, (struct iovec *)iov + 1, cnt);
 		ret = recvmsg(nd_fd->fd, &msg, 0);
 
-        //memmove((char *)(iov[1].iov_base) +14, iov[1].iov_base, ret);
-        //strcat(mac_layer, iov[0].iov_base);
-        //iov[0].iov_base = mac_layer;
-        //printf("iov0_len=%d\n", iov[0].iov_len);
-        //printf("iov1_len=%d\n", iov[1].iov_len);
-        //printf("iov2_len=%d\n", iov[2].iov_len);
-        //iov[0].iov_len = iov[0].iov_len + 14;
         //for(int i =0; i< iov[1].iov_len; i++){
         //    printf("%02x", *((char *)iov[1].iov_base + i) & 0xff);
         //}
@@ -147,12 +162,12 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 		}
 	} else {
 
-        int i=0;
-        for(; i< cnt; i++){
-            if(iov[i].iov_len > 0){
-                break;
-            }
-        }
+        //int i=0;
+        //for(; i< cnt; i++){
+        //    if(iov[i].iov_len > 0){
+        //        break;
+        //    }
+        //}
         /*ICMP and TCP dst port 443*/
         unsigned char *p = (unsigned char *)iov[i].iov_base;
         if((*(p + 9) != 0x06 ||*(p + 22) != 0x01 || *(p + 23) != 0xbb )&& \
@@ -165,16 +180,18 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 		    	perror("virtio net fd pipe write");
             //iov[i]_len is a constant number. As iov[i]_base is a preallocated buffer .
         } else {
-            char tmp[2000];
-            memcpy(tmp, iov[i].iov_base, ret);
-            memcpy((char *)(iov[i].iov_base) +14, tmp, ret);
+
+            //char tmp[2000];
+            //memcpy(tmp, iov[i].iov_base, ret);
+            //memcpy((char *)(iov[i].iov_base) +14, tmp, ret);
+            //memcpy(iov[i].iov_base, mac_layer, 14);
+
+            // add MAC header length(14 bytes) to return value
+            ret += 14;
+            // fulfill the lefted space for MAC header(14 bytes)
+            iov[i].iov_base -= 14;
+            iov[i].iov_len += 14;
             memcpy(iov[i].iov_base, mac_layer, 14);
-
-            //memcpy(iov[0].iov_base, mac_layer, 14);
-            ////iov[0].iov_base = mac_layer;
-            //iov[0].iov_len = 14;
-
-                ret += 14;
 
         }
     }
