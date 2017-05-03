@@ -58,7 +58,6 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 	ll.sll_family = PF_PACKET;
 	ll.sll_ifindex = if_nametoindex("venet0"); //ifname
 	//ll.sll_ifindex = if_nametoindex("enp0s9"); //ifname
-	//ll.sll_protocol = htons(ETH_P_ALL);
 	ll.sll_protocol = htons(ETH_P_IP);
     msg.msg_name = &ll;
     msg.msg_namelen = sizeof(ll);
@@ -70,8 +69,15 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
         //}
         //printf("\n\n");
 
-    iov[0].iov_base += 14;
-    iov[0].iov_len -= 14;
+    //iov[0].iov_base += 14;
+    //iov[0].iov_len -= 14;
+    for(int i=0; i< cnt; i++){
+        if(iov[i].iov_len > 14){
+            iov[i].iov_base += 14;
+            iov[i].iov_len -= 14;
+            break;
+        }
+    }
 
 	do {
 		//ret = writev(nd_fd->fd, iov, cnt);
@@ -104,54 +110,17 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 	ll.sll_family = PF_PACKET;
 	ll.sll_ifindex = if_nametoindex("venet0"); //ifname
 	//ll.sll_ifindex = if_nametoindex("enp0s9"); //ifname
-	//ll.sll_protocol = htons(ETH_P_ALL);
 	ll.sll_protocol = htons(ETH_P_IP);
     msg.msg_name = &ll;
     msg.msg_namelen = sizeof(ll);
     //msg.msg_iov = (struct iovec *)iov + 1;
     msg.msg_iov = iov;
-    //printf("cnt=%d\n",cnt);
     msg.msg_iovlen = cnt;
-        //printf("piov0_len=%d\n", iov[0].iov_len);
-        //printf("piov1_len=%d\n", iov[1].iov_len);
-        //printf("piov2_len=%d\n", iov[2].iov_len);
-        char mac_layer[] = {0x08,0x00,0x27,0x1a,0xb1,0x01,0x08,0x08,0x27,0x1a,0xb1,0x02,0x08,0x00};
+    char mac_layer[] = {0x08,0x00,0x27,0x1a,0xb1,0x01,0x08,0x08,0x27,0x1a,0xb1,0x02,0x08,0x00};
 
 	do {
 		//ret = readv(nd_fd->fd, (struct iovec *)iov + 1, cnt);
 		ret = recvmsg(nd_fd->fd, &msg, 0);
-        if(ret == -1){
-        //    perror("recvmsg");
-            iov[1].iov_len = 0;
-        } else {
-            //iov[1].iov_len = ret;
-        //memcpy(iov[0].iov_base, iov[1].iov_base, ret);
-        //memcpy((char *)(iov[1].iov_base) +14, iov[0].iov_base, ret);
-        /*ICMP*/
-            //if(*((char *)(iov[1].iov_base) + 9) != 0x01){
-            //    ret = -1;
-            //    break;
-            //}
-            /*ICMP and TCP dst port 443*/
-            if((*((char *)(iov[1].iov_base) + 9) != 0x06 ||*((char *)(iov[1].iov_base) + 22) != 0x01 || *((unsigned char *)(iov[1].iov_base) + 23) != 0xBB )&& \
-                    *((char *)(iov[1].iov_base) + 9) != 0x01){
-                ret = -1;
-                break;
-            }
-        char tmp[2000];
-        memcpy(tmp, iov[1].iov_base, ret);
-        memcpy((char *)(iov[1].iov_base) +14, tmp, ret);
-        //free(tmp);
-        memcpy(iov[1].iov_base, mac_layer, 14);
-
-        //memcpy(iov[0].iov_base, mac_layer, 14);
-        ////iov[0].iov_base = mac_layer;
-        //iov[0].iov_len = 14;
-
-            ret += 14;
-        }
-        //printf("ret=%d\n", ret);
-
 
         //memmove((char *)(iov[1].iov_base) +14, iov[1].iov_base, ret);
         //strcat(mac_layer, iov[0].iov_base);
@@ -176,7 +145,39 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 			if (write(nd_fd->pipe[1], &tmp, 1) < 0)
 				perror("virtio net fd pipe write");
 		}
-	}
+	} else {
+
+        int i=0;
+        for(; i< cnt; i++){
+            if(iov[i].iov_len > 0){
+                break;
+            }
+        }
+        /*ICMP and TCP dst port 443*/
+        unsigned char *p = (unsigned char *)iov[i].iov_base;
+        if((*(p + 9) != 0x06 ||*(p + 22) != 0x01 || *(p + 23) != 0xbb )&& \
+                *(p + 9) != 0x01){
+            ret = -1;
+		    char tmp;
+
+		    nd_fd->poll_rx = 1;
+		    if (write(nd_fd->pipe[1], &tmp, 1) < 0)
+		    	perror("virtio net fd pipe write");
+            //iov[i]_len is a constant number. As iov[i]_base is a preallocated buffer .
+        } else {
+            char tmp[2000];
+            memcpy(tmp, iov[i].iov_base, ret);
+            memcpy((char *)(iov[i].iov_base) +14, tmp, ret);
+            memcpy(iov[i].iov_base, mac_layer, 14);
+
+            //memcpy(iov[0].iov_base, mac_layer, 14);
+            ////iov[0].iov_base = mac_layer;
+            //iov[0].iov_len = 14;
+
+                ret += 14;
+
+        }
+    }
 	return ret;
 }
 
