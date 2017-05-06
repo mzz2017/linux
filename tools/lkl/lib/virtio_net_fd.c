@@ -162,29 +162,13 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 		}
 	} else {
 
-        //int i=0;
-        //for(; i< cnt; i++){
-        //    if(iov[i].iov_len > 0){
-        //        break;
-        //    }
-        //}
         /*ICMP and TCP dst port 443*/
         unsigned char *p = (unsigned char *)iov[i].iov_base;
-        if((*(p + 9) != 0x06 ||*(p + 22) != 0x01 || *(p + 23) != 0xbb )&& \
-                *(p + 9) != 0x01){
-            ret = -1;
-		    char tmp;
+        uint16_t dst_port = ntohs(*(uint16_t *)(p + 22));
 
-		    nd_fd->poll_rx = 1;
-		    if (write(nd_fd->pipe[1], &tmp, 1) < 0)
-		    	perror("virtio net fd pipe write");
-            //iov[i]_len is a constant number. As iov[i]_base is a preallocated buffer .
-        } else {
-
-            //char tmp[2000];
-            //memcpy(tmp, iov[i].iov_base, ret);
-            //memcpy((char *)(iov[i].iov_base) +14, tmp, ret);
-            //memcpy(iov[i].iov_base, mac_layer, 14);
+        //if((*(p + 9) != 0x06 ||*(p + 22) != 0x01 || *(p + 23) != 0xbb )&& \
+        //        *(p + 9) != 0x01)
+        if(*(p + 9) != 0x06 || (*(p + 9) == 0x06 && (dst_port == 443 || dst_port == 80|| (dst_port >= 20000 && dst_port <= 32767) ))){
 
             // add MAC header length(14 bytes) to return value
             ret += 14;
@@ -192,6 +176,16 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
             iov[i].iov_base -= 14;
             iov[i].iov_len += 14;
             memcpy(iov[i].iov_base, mac_layer, 14);
+
+        } else {
+
+            ret = -1;
+		    char tmp;
+
+		    nd_fd->poll_rx = 1;
+		    if (write(nd_fd->pipe[1], &tmp, 1) < 0)
+		    	perror("virtio net fd pipe write");
+            //iov[i]_len is a constant number. As iov[i]_base is a preallocated buffer .
 
         }
     }
