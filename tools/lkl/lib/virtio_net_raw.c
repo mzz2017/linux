@@ -9,6 +9,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -30,7 +31,7 @@
 struct lkl_netdev *lkl_netdev_raw_create(const char *ifname)
 {
 	int ret;
-	struct sockaddr_ll ll;
+	struct sockaddr_ll *ll;
 	int fd, fd_flags, val;
 
 	//fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
@@ -42,16 +43,17 @@ struct lkl_netdev *lkl_netdev_raw_create(const char *ifname)
 		return NULL;
 	}
 
-	memset(&ll, 0, sizeof(ll));
-	ll.sll_family = PF_PACKET;
-	ll.sll_ifindex = if_nametoindex(ifname);
+	//memset(&ll, 0, sizeof(ll));
+    ll = malloc(sizeof(*ll));
+	ll->sll_family = PF_PACKET;
+	ll->sll_ifindex = if_nametoindex(ifname);
 	//ll.sll_protocol = htons(ETH_P_ALL);
-	ll.sll_protocol = htons(ETH_P_IP);
+	ll->sll_protocol = htons(ETH_P_IP);
     //const unsigned char ether_broadcast_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     //ll.sll_halen = ETHER_ADDR_LEN;
     //memcpy(ll.sll_addr, ether_broadcast_addr, ETHER_ADDR_LEN);
 
-	ret = bind(fd, (struct sockaddr *)&ll, sizeof(ll));
+	ret = bind(fd, (struct sockaddr *)ll, sizeof(*ll));
 	if (ret) {
 		perror("bind");
 		close(fd);
@@ -70,5 +72,5 @@ struct lkl_netdev *lkl_netdev_raw_create(const char *ifname)
 	fd_flags = fcntl(fd, F_GETFD, NULL);
 	fcntl(fd, F_SETFL, fd_flags | O_NONBLOCK);
 
-	return lkl_register_netdev_fd(fd);
+	return lkl_register_netdev_fd(fd, ll);
 }

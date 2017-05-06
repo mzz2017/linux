@@ -44,6 +44,7 @@ struct lkl_netdev_fd {
 	int poll_tx, poll_rx;
 	/* controle pipe */
 	int pipe[2];
+	struct sockaddr_ll *ll;
 };
 
 static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
@@ -52,15 +53,16 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 	struct lkl_netdev_fd *nd_fd =
 		container_of(nd, struct lkl_netdev_fd, dev);
     struct msghdr msg;
-	struct sockaddr_ll ll;
+	//struct sockaddr_ll ll;
     memset(&msg, 0, sizeof(msg));
-	memset(&ll, 0, sizeof(ll));
-	ll.sll_family = PF_PACKET;
-	ll.sll_ifindex = if_nametoindex("venet0"); //ifname
-	//ll.sll_ifindex = if_nametoindex("enp0s9"); //ifname
-	ll.sll_protocol = htons(ETH_P_IP);
-    msg.msg_name = &ll;
-    msg.msg_namelen = sizeof(ll);
+	//memset(&ll, 0, sizeof(ll));
+	//ll.sll_family = PF_PACKET;
+	//ll.sll_ifindex = if_nametoindex("venet0"); //ifname
+	////ll.sll_ifindex = if_nametoindex("enp0s9"); //ifname
+	//ll.sll_protocol = htons(ETH_P_IP);
+    //msg.msg_name = &ll;
+    msg.msg_name = nd_fd->ll;
+    msg.msg_namelen = sizeof(struct sockaddr_ll);
     msg.msg_iov = iov;
     msg.msg_iovlen = cnt;
 
@@ -116,14 +118,15 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 		container_of(nd, struct lkl_netdev_fd, dev);
     struct msghdr msg;
     memset(&msg, 0, sizeof(msg));
-	struct sockaddr_ll ll;
-	memset(&ll, 0, sizeof(ll));
-	ll.sll_family = PF_PACKET;
-	ll.sll_ifindex = if_nametoindex("venet0"); //ifname
-	//ll.sll_ifindex = if_nametoindex("enp0s9"); //ifname
-	ll.sll_protocol = htons(ETH_P_IP);
-    msg.msg_name = &ll;
-    msg.msg_namelen = sizeof(ll);
+	//struct sockaddr_ll ll;
+	//memset(&ll, 0, sizeof(ll));
+	//ll.sll_family = PF_PACKET;
+	//ll.sll_ifindex = if_nametoindex("venet0"); //ifname
+	////ll.sll_ifindex = if_nametoindex("enp0s9"); //ifname
+	//ll.sll_protocol = htons(ETH_P_IP);
+    //msg.msg_name = &ll;
+    msg.msg_name = nd_fd->ll;
+    msg.msg_namelen = sizeof(struct sockaddr_ll);
     //msg.msg_iov = (struct iovec *)iov + 1;
     msg.msg_iov = iov;
     msg.msg_iovlen = cnt;
@@ -168,7 +171,7 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 
         //if((*(p + 9) != 0x06 ||*(p + 22) != 0x01 || *(p + 23) != 0xbb )&& \
         //        *(p + 9) != 0x01)
-        if(*(p + 9) != 0x06 || (*(p + 9) == 0x06 && (dst_port == 443 || dst_port == 80|| (dst_port >= 20000 && dst_port <= 32767) ))){
+        if(*(p + 9) != 0x06 || (*(p + 9) == 0x06 && (dst_port == 443 || dst_port == 80))){
 
             // add MAC header length(14 bytes) to return value
             ret += 14;
@@ -276,7 +279,7 @@ struct lkl_dev_net_ops fd_net_ops =  {
 	.free = fd_net_free,
 };
 
-struct lkl_netdev *lkl_register_netdev_fd(int fd)
+struct lkl_netdev *lkl_register_netdev_fd(int fd, struct sockaddr_ll *ll)
 {
 	struct lkl_netdev_fd *nd;
 
@@ -290,6 +293,7 @@ struct lkl_netdev *lkl_register_netdev_fd(int fd)
 	memset(nd, 0, sizeof(*nd));
 
 	nd->fd = fd;
+    nd->ll = ll;
 	if (pipe(nd->pipe) < 0) {
 		perror("pipe");
 		free(nd);

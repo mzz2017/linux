@@ -10,7 +10,7 @@ struct ifreq;
  * @fd - a POSIX file descriptor number for input/output
  * @returns a struct lkl_netdev_linux_fdnet entry for virtio-net
  */
-struct lkl_netdev *lkl_register_netdev_fd(int fd);
+struct lkl_netdev *lkl_register_netdev_fd(int fd, struct sockaddr_ll *ll);
 
 
 /**
