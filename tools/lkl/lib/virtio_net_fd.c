@@ -45,7 +45,25 @@ struct lkl_netdev_fd {
 	/* controle pipe */
 	int pipe[2];
 	struct sockaddr_ll *ll;
+    struct port_array {
+        unsigned int *ports;
+        unsigned int port_num;
+    } *ports;
 };
+
+int check_ports(unsigned char *p, struct port_array *ports){
+
+    uint16_t dst_port = ntohs(*(uint16_t *)(p + 22));
+    if(*(p + 9) != 0x06){
+        return 1;
+    } else {
+        for(uint i=0; i< ports->port_num; i++){
+            if(dst_port == ports->ports[i])
+                return 1;
+        }
+    }
+    return 0;
+}
 
 static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 {
@@ -84,7 +102,8 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
     //}
 
     // strip the MAC header(14 bytes)
-    for(int i=0; i< cnt; i++){
+    int i=0;
+    for(; i< cnt; i++){
         if(iov[i].iov_len >= 14){
             iov[i].iov_base += 14;
             iov[i].iov_len -= 14;
@@ -99,6 +118,9 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 
 	if (ret < 0) {
 		if (errno != EAGAIN) {
+            for(;i < cnt; i++){
+                printf("iov[%d].iov_len=%d\n", i, iov[i].iov_len);
+            }
 			perror("write to fd netdev fails");
 		} else {
 			char tmp;
@@ -167,11 +189,12 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 
         /*ICMP and TCP dst port 443*/
         unsigned char *p = (unsigned char *)iov[i].iov_base;
-        uint16_t dst_port = ntohs(*(uint16_t *)(p + 22));
+        //uint16_t dst_port = ntohs(*(uint16_t *)(p + 22));
 
         //if((*(p + 9) != 0x06 ||*(p + 22) != 0x01 || *(p + 23) != 0xbb )&& \
         //        *(p + 9) != 0x01)
-        if(*(p + 9) != 0x06 || (*(p + 9) == 0x06 && (dst_port == 443 || dst_port == 80))){
+        //if(*(p + 9) != 0x06 || (*(p + 9) == 0x06 && (dst_port == 443 || dst_port == 80)))
+        if(check_ports(p, nd_fd->ports)){
 
             // add MAC header length(14 bytes) to return value
             ret += 14;
