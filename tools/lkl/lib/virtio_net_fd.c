@@ -111,6 +111,15 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
         }
     }
 
+    if(i == cnt){
+		char tmp;
+
+		nd_fd->poll_tx = 1;
+		if (write(nd_fd->pipe[1], &tmp, 1) <= 0)
+			perror("virtio net fd pipe write");
+        return -1;
+    }
+
 	do {
 		//ret = writev(nd_fd->fd, iov, cnt);
 		ret = sendmsg(nd_fd->fd, &msg, 0);
@@ -118,6 +127,7 @@ static int fd_net_tx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
 
 	if (ret < 0) {
 		if (errno != EAGAIN) {
+            printf("\ni=%d\ncnt=%d\n", i, cnt);
             for(;i < cnt; i++){
                 printf("iov[%d].iov_len=%d\n", i, iov[i].iov_len);
             }
@@ -163,6 +173,15 @@ static int fd_net_rx(struct lkl_netdev *nd, struct iovec *iov, int cnt)
             iov[i].iov_len -= 14;
             break;
         }
+    }
+
+    if(i == cnt){
+		char tmp;
+
+		nd_fd->poll_rx = 1;
+		if (write(nd_fd->pipe[1], &tmp, 1) < 0)
+			perror("virtio net fd pipe write");
+        return -1;
     }
 
 	do {
