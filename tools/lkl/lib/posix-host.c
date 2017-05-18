@@ -1,5 +1,6 @@
 #include <pthread.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <sys/time.h>
 #include <time.h>
 #include <signal.h>
@@ -258,18 +259,116 @@ static unsigned long long time_ns(void)
 	return 1e9*ts.tv_sec + ts.tv_nsec;
 }
 
+//static void *timer_alloc(void (*fn)(void *), void *arg)
+//{
+//	int err;
+//	timer_t timer;
+//	struct sigevent se =  {
+//		.sigev_notify = SIGEV_THREAD,
+//		.sigev_value = {
+//			.sival_ptr = arg,
+//		},
+//		.sigev_notify_function = (void (*)(union sigval))fn,
+//	};
+//
+//	err = timer_create(CLOCK_REALTIME, &se, &timer);
+//	if (err)
+//		return NULL;
+//
+//	return (void *)(long)timer;
+//}
+
+static pid_t tid;
+static pthread_mutex_t mtex;
+struct targ {
+    void (*fn)(void *);
+    void *arg;
+};
+static struct targ targi;
+static void *
+sig_threadproc(void *thrarg)
+{
+    sigset_t sigset;
+
+    tid = syscall(SYS_gettid);
+    pthread_mutex_unlock(&mtex);
+
+    sigemptyset(&sigset);
+    sigaddset(&sigset, SIGALRM);
+
+    void (*fn)(void *) = ((struct targ *)thrarg)->fn;
+    void *arg = ((struct targ *)thrarg)->arg;
+
+
+    /* endless loop to wait for and handle a signal repeatedly */
+    for (;;) {
+    int sig;
+    int error;
+
+        error = sigwait(&sigset, &sig);
+        if (error == 0) {
+            assert(sig == SIGALRM);
+            (*fn)(arg);
+        } else {
+            perror("sigwait");
+        }
+    }
+    return NULL;
+}
+
+static void
+sig_alrm_handler(int signo)
+{
+    /**
+     * dummy signal handler,
+     * the signal is actually handled in sig_threadproc()
+     **/
+}
+
+#define sigev_notify_thread_id	 _sigev_un._tid
 static void *timer_alloc(void (*fn)(void *), void *arg)
 {
 	int err;
+    sigset_t sigset;
+    struct sigaction sa;
+    pthread_t sig_thread;
 	timer_t timer;
-	struct sigevent se =  {
-		.sigev_notify = SIGEV_THREAD,
-		.sigev_value = {
-			.sival_ptr = arg,
-		},
-		.sigev_notify_function = (void (*)(union sigval))fn,
-	};
 
+    /* mask SIGALRM in all threads by default */
+    sigemptyset(&sigset);
+    sigaddset(&sigset, SIGALRM);
+    sigprocmask(SIG_BLOCK, &sigset, NULL);
+
+    /* we need a signal handler.
+     * The default is to call abort() and
+     * setting SIG_IGN might cause the signal
+     * to not be delivered at all.
+     **/
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = sig_alrm_handler;
+    sigaction(SIGALRM, &sa, NULL);
+
+    pthread_mutex_init(&mtex, NULL);
+    pthread_mutex_lock(&mtex);
+
+    //struct targ targi = {fn, arg};
+    targi.fn = fn;
+    targi.arg = arg;
+
+    /* create SIGALRM looper thread */
+    pthread_create(&sig_thread, NULL, sig_threadproc, &targi);
+
+    pthread_mutex_lock(&mtex);
+    pthread_mutex_destroy(&mtex);
+	struct sigevent se =  {
+		.sigev_notify = SIGEV_THREAD_ID,
+		//.sigev_value = {
+		//	.sival_ptr = arg,
+		//},
+		//.sigev_notify_function = (void (*)(union sigval))fn,
+        .sigev_notify_thread_id = (int)tid,
+        .sigev_signo = SIGALRM,
+	};
 	err = timer_create(CLOCK_REALTIME, &se, &timer);
 	if (err)
 		return NULL;
