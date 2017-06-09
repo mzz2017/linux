@@ -786,6 +786,7 @@ static void bbr_main(struct sock *sk, const struct rate_sample *rs)
 {
 	struct bbr *bbr = inet_csk_ca(sk);
 	u32 bw;
+    printk("BBRsdfasdfasdf\n");
 
 	bbr_update_model(sk, rs);
 
