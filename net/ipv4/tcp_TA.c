@@ -463,7 +463,7 @@ static void bictcp_acked(struct sock *sk, const struct ack_sample *sample)
 	u32 delay;
 	u64 rate;
 
-    printk("PCCsdfasdf\n");
+    //printk("PCCsdfasdf\n");
 
 	if (5000 == ntohs(sk->__sk_common.skc_dport)){	/* set sk_pacing_rate to 200 % of current rate (mss * cwnd / srtt) */
 		rate = (u64)tp->mss_cache * ((USEC_PER_SEC / 100) << 3);

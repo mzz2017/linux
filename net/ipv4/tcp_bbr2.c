@@ -200,13 +200,13 @@ static void bbr2_set_pacing_rate(struct sock *sk, const struct rate_sample *rs, 
 	int tgain = gain;
 	u8 state = inet_csk(sk)->icsk_ca_state;
 
-	if (rs && rs->losses > 0) {	
+	if (rs && rs->losses > 0) {
 		//tgain = tgain *5/4;
 	}
 	rate = bbr2_rate_bytes_per_sec(sk, rate, tgain);
 	rate = min_t(u64, rate, sk->sk_max_pacing_rate);
-	if (rs) {	
-		//printk("loss:%d  st:%d  mode:%d  gain:%d--%d  pacing:%u  cwnd:%d\n",rs->losses,  state, bbr2->mode, gain, tgain, rate, tp->snd_cwnd);
+	if (rs) {
+		printk("loss:%d  st:%d  mode:%d  gain:%d--%d  pacing:%u  cwnd:%d\n",rs->losses,  state, bbr2->mode, gain, tgain, rate, tp->snd_cwnd);
 	}
 	if (bbr2->mode != BBR2_STARTUP || rate > sk->sk_pacing_rate)
 		sk->sk_pacing_rate = rate;
@@ -736,9 +736,9 @@ static void bbr2_update_min_rtt(struct sock *sk, const struct rate_sample *rs)
 	bbr2->rtt_us = rs->rtt_us;
 	rtt_prior = minmax_get(&bbr2->max_rtt);
 	bbr2->rtt_us = min(bbr2->rtt_us, rtt_prior);
-	
-	minmax_running_max(&bbr2->max_rtt, bbr2_bw_rtts, bbr2->rtt_cnt, rs->rtt_us);	
-	
+
+	minmax_running_max(&bbr2->max_rtt, bbr2_bw_rtts, bbr2->rtt_cnt, rs->rtt_us);
+
 
 	if (bbr2_probe_rtt_mode_ms > 0 && filter_expired &&
 	    !bbr2->idle_restart && bbr2->mode != BBR2_PROBE_RTT) {
@@ -913,7 +913,7 @@ static struct tcp_congestion_ops tcp_bbr2_cong_ops __read_mostly = {
 
 static int __init bbr2_register(void)
 {
-	BUILD_BUG_ON(sizeof(struct bbr2) > ICSK_CA_PRIV_SIZE);
+	//BUILD_BUG_ON(sizeof(struct bbr2) > ICSK_CA_PRIV_SIZE);
 	return tcp_register_congestion_control(&tcp_bbr2_cong_ops);
 }
 
