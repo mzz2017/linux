@@ -151,7 +151,8 @@ $(OUTPUT)%-in.o: $(OUTPUT)lib/lkl.o FORCE
 	$(Q)$(MAKE) -f $(srctree)/tools/build/Makefile.build dir=$(patsubst %/,%,$(dir $*)) obj=$(notdir $*)
 
 $(OUTPUT)lib/lkl.o:
-	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) defconfig
+#	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) defconfig
+	$(Q)$(MAKE) -C ../.. ARCH=lkl $(KOPT) menuconfig
 # this workaround is for arm32 linker (ld.gold)
 	$(Q)export PATH=$(srctree)/tools/lkl/bin/:${PATH} ;\
 	$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(OUTPUT)
